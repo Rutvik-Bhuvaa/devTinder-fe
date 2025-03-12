@@ -1,11 +1,37 @@
 import React from "react";
 import { useState } from "react";
+import axios from "axios";
+import { useDispatch } from "react-redux";
+import { addUser } from "../utils/userSlice";
+import { useNavigate } from "react-router";
+import { BASE_URL } from "../utils/constants";
 
 const Login = () => {
-  const [emailId, setEmailId] = useState("");
-  const [password, setPassword] = useState("");
+  const [emailId, setEmailId] = useState("ranbirkapoor9@gmail.com");
+  const [password, setPassword] = useState("Ranbir@123");
 
-  const handleLogin = async () => {};
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      const res = await axios.post(
+        BASE_URL + "/login",
+        { emailId, password },
+        {
+          withCredentials: true,
+        }
+      );
+
+      if (res.data) {
+        dispatch(addUser(res.data));
+      }
+      navigate("/");
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   return (
     <div className="flex justify-center items-center min-h-screen bg-base-200">
@@ -21,7 +47,11 @@ const Login = () => {
         </p>
 
         {/* Form */}
-        <form className="flex flex-col gap-5">
+        <form
+          className="flex flex-col gap-5"
+          onSubmit={handleLogin}
+          method="POST"
+        >
           <div className="form-control">
             <label className="label text-white font-medium">Email</label>
             <input
@@ -53,7 +83,10 @@ const Login = () => {
             Forgot password?
           </a>
 
-          <button className="btn btn-primary w-full hover:brightness-110 transition text-lg">
+          <button
+            className="btn btn-primary w-full hover:brightness-110 transition text-lg"
+            type="submit"
+          >
             Login
           </button>
 
