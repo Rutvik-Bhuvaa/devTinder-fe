@@ -1,18 +1,36 @@
 import React from "react";
-import { useSelector } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
+import { Link, useNavigate } from "react-router";
+import { BASE_URL } from "../utils/constants";
+import axios from "axios";
+import { removeUser } from "../utils/userSlice";
 
 const Navbar = () => {
-  const user = useSelector((store) => store.user);
+  const userData = useSelector((store) => store.user);
+  const navigate = useNavigate();
+  const dispatch = useDispatch();
+
+  const handleLogout = async () => {
+    try {
+      await axios.post(BASE_URL + "/logout", {}, { withCredentials: true });
+      dispatch(removeUser());
+      navigate("/login");
+    } catch (err) {
+      console.err(err);
+    }
+  };
 
   return (
     <div className="navbar bg-gradient-to-r from-[#4F46E5] to-[#6366F1] shadow-lg">
       <div className="flex-1">
-        <a className="btn btn-ghost text-2xl font-bold text-white">DevTinder</a>
+        <Link to="/" className="btn btn-ghost text-2xl font-bold text-white">
+          DevTinder
+        </Link>
       </div>
-      {user && (
+      {userData && (
         <div className="flex items-center gap-4">
           <h2 className="text-lg font-semibold text-white">
-            Hey, {user.user.firstName}! 👋
+            Hey, {userData.firstName}! 👋
           </h2>
 
           {/* Avatar Dropdown */}
@@ -25,7 +43,7 @@ const Navbar = () => {
               <div className="w-10 rounded-full overflow-hidden border-2 border-white">
                 <img
                   alt="User photo"
-                  src={user.user.photoURL}
+                  src={userData.photoURL}
                   className="object-cover"
                 />
               </div>
@@ -37,10 +55,13 @@ const Navbar = () => {
               className="menu menu-sm dropdown-content mt-3 w-52 rounded-lg bg-gray-900 text-white shadow-xl border border-gray-700"
             >
               <li>
-                <a className="flex justify-between hover:bg-gray-800 px-4 py-2 rounded font-medium transition-all">
+                <Link
+                  to="/profile"
+                  className="flex justify-between hover:bg-gray-800 px-4 py-2 rounded font-medium transition-all"
+                >
                   Profile{" "}
                   <span className="badge bg-indigo-500 text-white">New</span>
-                </a>
+                </Link>
               </li>
               <li>
                 <a className="hover:bg-gray-800 px-4 py-2 rounded font-medium transition-all">
@@ -48,7 +69,10 @@ const Navbar = () => {
                 </a>
               </li>
               <li>
-                <a className="hover:bg-red-600 px-4 py-2 rounded font-medium transition-all cursor-pointer">
+                <a
+                  className="hover:bg-red-600 px-4 py-2 rounded font-medium transition-all cursor-pointer"
+                  onClick={handleLogout}
+                >
                   Logout
                 </a>
               </li>

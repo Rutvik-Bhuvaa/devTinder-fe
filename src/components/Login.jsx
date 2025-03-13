@@ -9,12 +9,14 @@ import { BASE_URL } from "../utils/constants";
 const Login = () => {
   const [emailId, setEmailId] = useState("ranbirkapoor9@gmail.com");
   const [password, setPassword] = useState("Ranbir@123");
+  const [error, setError] = useState("");
 
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const handleLogin = async (e) => {
     e.preventDefault();
     e.stopPropagation();
+    setError("");
     try {
       const res = await axios.post(
         BASE_URL + "/login",
@@ -25,11 +27,19 @@ const Login = () => {
       );
 
       if (res.data) {
+        console.log(res.data);
         dispatch(addUser(res.data));
+        navigate("/");
       }
-      navigate("/");
     } catch (err) {
       console.error(err);
+      if (err.response?.data?.includes("Wrong email")) {
+        setError("Please enter a valid email address");
+      } else if (err.response?.data?.includes("Invalid credentials")) {
+        setError("Email or password is incorrect");
+      } else {
+        setError("Login failed. Please try again");
+      }
     }
   };
 
@@ -45,6 +55,27 @@ const Login = () => {
         <p className="text-gray-400 text-center mb-6">
           Sign in to continue your journey
         </p>
+
+        {/* Error Message */}
+        {error && (
+          <div className="bg-red-600 text-white px-4 py-3 rounded-lg mb-6 flex items-center gap-2">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-5 w-5 flex-shrink-0"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+            <span className="text-sm font-medium">{error}</span>
+          </div>
+        )}
 
         {/* Form */}
         <form
