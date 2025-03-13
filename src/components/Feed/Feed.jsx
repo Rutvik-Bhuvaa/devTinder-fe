@@ -121,44 +121,48 @@ const Feed = () => {
   }, [handleSwipe, isTransitioning, profiles.length]);
 
   if (loading && profiles.length === 0) return <LoadingCard />;
-  if (profiles.length === 0 && !loading && !hasMore) {
+  if (!loading && profiles.length === 0 && !hasMore) {
     return <NoMoreProfiles onRefresh={fetchProfiles} />;
   }
 
-  return (
-    <div className="flex justify-center items-center min-h-screen bg-base-200 p-4">
-      <SwipeIndicators offsetX={offsetX} />
+  if (profiles.length > 0) {
+    return (
+      <div className="flex justify-center items-center min-h-screen bg-base-200 p-4">
+        <SwipeIndicators offsetX={offsetX} />
 
-      {profiles.length > 0 && (
-        <div className="w-full max-w-md relative">
-          <ProfileCard
-            key={profiles[0]._id}
+        {profiles.length > 0 && (
+          <div className="w-full max-w-md relative">
+            <ProfileCard
+              key={profiles[0]._id}
+              profile={profiles[0]}
+              ref={cardRef}
+              swipeDirection={swipeDirection}
+              offsetX={offsetX}
+              isTransitioning={isTransitioning}
+              onSwipe={handleSwipe}
+              onShowDetails={() => setShowDetails(true)}
+            />
+
+            {profiles[1] && (
+              <div className="absolute top-0 left-0 right-0 -z-10 scale-[0.98] opacity-50">
+                <ProfileCard profile={profiles[1]} preview />
+              </div>
+            )}
+          </div>
+        )}
+
+        {showDetails && profiles.length > 0 && (
+          <ProfileDetailsModal
             profile={profiles[0]}
-            ref={cardRef}
-            swipeDirection={swipeDirection}
-            offsetX={offsetX}
-            isTransitioning={isTransitioning}
+            onClose={() => setShowDetails(false)}
             onSwipe={handleSwipe}
-            onShowDetails={() => setShowDetails(true)}
           />
+        )}
+      </div>
+    );
+  }
 
-          {profiles[1] && (
-            <div className="absolute top-0 left-0 right-0 -z-10 scale-[0.98] opacity-50">
-              <ProfileCard profile={profiles[1]} preview />
-            </div>
-          )}
-        </div>
-      )}
-
-      {showDetails && profiles.length > 0 && (
-        <ProfileDetailsModal
-          profile={profiles[0]}
-          onClose={() => setShowDetails(false)}
-          onSwipe={handleSwipe}
-        />
-      )}
-    </div>
-  );
+  return <LoadingCard />;
 };
 
 export default Feed;
