@@ -1,4 +1,4 @@
-import { FaGithub } from "react-icons/fa";
+import { FaTimes, FaHeart, FaGithub, FaBriefcase } from "react-icons/fa";
 
 // First, update the ProfileDetailsModal component
 export const ProfileDetailsModal = ({ profile, onClose, onSwipe }) => {

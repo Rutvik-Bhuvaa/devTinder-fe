@@ -7,10 +7,13 @@ import {
   FaImage,
   FaBriefcase,
   FaEye,
+  FaCheckCircle,
 } from "react-icons/fa";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useDispatch } from "react-redux";
+import { addUser } from "../utils/userSlice";
 
-export const EditProfile = ({ user }) => {
+export const EditProfile = ({ user, onProfileUpdate }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState(null);
   const [formData, setFormData] = useState({
@@ -24,6 +27,15 @@ export const EditProfile = ({ user }) => {
   });
   const [newSkill, setNewSkill] = useState("");
   const [showPreview, setShowPreview] = useState(false);
+  const [showToast, setShowToast] = useState(false);
+  const messageTimerRef = useRef(null);
+  const dispatch = useDispatch();
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () =>
+      messageTimerRef.current && clearTimeout(messageTimerRef.current);
+  }, []);
 
   // Initialize form with user data
   useEffect(() => {
@@ -40,26 +52,92 @@ export const EditProfile = ({ user }) => {
     }
   }, [user]);
 
+  const validateName = (value) => {
+    // Check if the input contains only letters, spaces, and hyphens
+    return /^[A-Za-z\s-]+$/.test(value);
+  };
+
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+
+    // Validate firstName and lastName to ensure they only contain letters
+    if (
+      (name === "firstName" || name === "lastName") &&
+      value &&
+      !validateName(value)
+    ) {
+      setMessage({
+        type: "error",
+        text: `${
+          name === "firstName" ? "First name" : "Last name"
+        } must contain only letters, spaces, and hyphens.`,
+      });
+      return; // Don't update the form data
+    }
+
+    // Clear error message if valid input
+    if (
+      message?.type === "error" &&
+      (name === "firstName" || name === "lastName")
+    ) {
+      setMessage(null);
+    }
+
+    setFormData({ ...formData, [name]: value });
+  };
+
+  const addSkill = () => {
+    if (newSkill.trim() && !formData.skills.includes(newSkill.trim())) {
+      setFormData({
+        ...formData,
+        skills: [...formData.skills, newSkill.trim()],
+      });
+      setNewSkill("");
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // Validate names before submission
+    if (formData.firstName && !validateName(formData.firstName)) {
+      setMessage({
+        type: "error",
+        text: "First name must contain only letters, spaces, and hyphens.",
+      });
+      return;
+    }
+
+    if (formData.lastName && !validateName(formData.lastName)) {
+      setMessage({
+        type: "error",
+        text: "Last name must contain only letters, spaces, and hyphens.",
+      });
+      return;
+    }
+
     setIsSubmitting(true);
     setMessage(null);
 
+    if (messageTimerRef.current) {
+      clearTimeout(messageTimerRef.current);
+    }
+
     try {
-      // Convert form data to match backend expectations
+      // Only include fields that backend allows
       const updateData = {
         photoURL: formData.photo,
         firstName: formData.firstName,
         lastName: formData.lastName,
         age: formData.age ? parseInt(formData.age) : undefined,
         about: formData.about,
-        title: formData.title,
         skills: formData.skills,
       };
+
+      // Remove undefined values
+      Object.keys(updateData).forEach(
+        (key) => updateData[key] === undefined && delete updateData[key]
+      );
 
       const response = await axios.patch(
         `${BASE_URL}/profile/edit`,
@@ -67,10 +145,39 @@ export const EditProfile = ({ user }) => {
         { withCredentials: true }
       );
 
+      // Update UI with response data
+      if (response.data?.data) {
+        setFormData({
+          photo: response.data.data.photoURL || "",
+          firstName: response.data.data.firstName || "",
+          lastName: response.data.data.lastName || "",
+          age: response.data.data.age || "",
+          about: response.data.data.about || "",
+          skills: Array.isArray(response.data.data.skills)
+            ? response.data.data.skills
+            : [],
+          title: response.data.data.title || "",
+        });
+
+        // Update Redux state with new user data
+        dispatch(addUser(response.data.data));
+
+        // Show toast and call update function
+        setShowToast(true);
+        setTimeout(() => setShowToast(false), 3000);
+        onProfileUpdate?.();
+      }
+
+      // Set success message with timeout
       setMessage({
         type: "success",
-        text: response.data.message,
+        text: response.data.message || "Profile updated successfully!",
+        userName: formData.firstName,
       });
+
+      messageTimerRef.current = setTimeout(() => {
+        setMessage((prev) => (prev?.type === "success" ? null : prev));
+      }, 5000);
     } catch (err) {
       setMessage({
         type: "error",
@@ -82,62 +189,59 @@ export const EditProfile = ({ user }) => {
   };
 
   // Profile Card Preview Component
-  const ProfileCardPreview = () => {
-    return (
-      <div className="card bg-base-100 shadow-xl w-full max-w-sm mx-auto hover:shadow-[0_0_30px_rgba(255,255,255,0.2)] transition-all duration-300 border border-base-300">
-        <figure className="relative h-[20rem] overflow-hidden">
-          <img
-            src={
-              formData.photo ||
-              "https://ui-avatars.com/api/?name=Preview&background=random&size=350"
-            }
-            alt="Profile Preview"
-            className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
-            onError={(e) => {
-              e.target.src = `https://ui-avatars.com/api/?name=${formData.firstName}+${formData.lastName}&background=random&size=350`;
-            }}
-          />
+  const ProfileCardPreview = () => (
+    <div className="card bg-base-100 shadow-xl w-full max-w-sm mx-auto hover:shadow-[0_0_30px_rgba(255,255,255,0.2)] transition-all duration-300 border border-base-300">
+      <figure className="relative h-[20rem] overflow-hidden">
+        <img
+          src={
+            formData.photo ||
+            `https://ui-avatars.com/api/?name=${formData.firstName}+${formData.lastName}&background=random&size=350`
+          }
+          alt="Profile Preview"
+          className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
+          onError={(e) => {
+            e.target.src = `https://ui-avatars.com/api/?name=${formData.firstName}+${formData.lastName}&background=random&size=350`;
+          }}
+        />
 
-          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-6">
-            <h2 className="text-3xl font-bold text-white mb-1">
-              {formData.firstName} {formData.lastName}
-              {formData.age ? `, ${formData.age}` : ""}
-            </h2>
-            <div className="flex items-center text-white/90 mb-3">
-              <FaBriefcase className="mr-2" />
-              <p>{formData.title || "Software Developer"}</p>
-            </div>
-            <div className="flex flex-wrap gap-1">
-              {formData.skills.slice(0, 3).map((skill, index) => (
-                <span
-                  key={index}
-                  className="badge badge-sm badge-primary transform transition-all duration-300 hover:scale-110"
-                >
-                  {skill}
-                </span>
-              ))}
-              {formData.skills.length > 3 && (
-                <span className="badge badge-sm badge-secondary">
-                  +{formData.skills.length - 3} more
-                </span>
-              )}
-            </div>
+        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-6">
+          <h2 className="text-3xl font-bold text-white mb-1">
+            {formData.firstName} {formData.lastName}
+            {formData.age ? `, ${formData.age}` : ""}
+          </h2>
+          <div className="flex items-center text-white/90 mb-3">
+            <FaBriefcase className="mr-2" />
+            <p>{formData.title || "Software Developer"}</p>
           </div>
-        </figure>
-
-        <div className="card-body">
-          <h3 className="card-title text-lg font-semibold">About</h3>
-          <p className="text-base-content/80">
-            {formData.about || "No description provided yet."}
-          </p>
-
-          <div className="card-actions justify-center mt-4">
-            <div className="badge badge-outline">Preview Mode</div>
+          <div className="flex flex-wrap gap-1">
+            {formData.skills.slice(0, 3).map((skill, index) => (
+              <span
+                key={index}
+                className="badge badge-sm badge-primary transform transition-all duration-300 hover:scale-110"
+              >
+                {skill}
+              </span>
+            ))}
+            {formData.skills.length > 3 && (
+              <span className="badge badge-sm badge-secondary">
+                +{formData.skills.length - 3} more
+              </span>
+            )}
           </div>
         </div>
+      </figure>
+
+      <div className="card-body">
+        <h3 className="card-title text-lg font-semibold">About</h3>
+        <p className="text-base-content/80">
+          {formData.about || "No description provided yet."}
+        </p>
+        <div className="card-actions justify-center mt-4">
+          <div className="badge badge-outline">Preview Mode</div>
+        </div>
       </div>
-    );
-  };
+    </div>
+  );
 
   return (
     <div className="w-full max-w-2xl p-8 rounded-2xl shadow-2xl bg-base-100 transition-all border border-base-300 hover:shadow-[0_0_30px_rgba(255,255,255,0.1)] m-20">
@@ -165,45 +269,85 @@ export const EditProfile = ({ user }) => {
         </div>
       )}
 
+      {/* Alert Messages */}
       {message && (
         <div
-          className={`alert ${
-            message.type === "success" ? "alert-success" : "alert-error"
-          } mb-6`}
+          className={`alert mb-6 ${
+            message.type === "success"
+              ? "alert-success animate-pulse shadow-lg shadow-success/30"
+              : "bg-red-600 text-white"
+          }`}
         >
-          <div className="flex items-center">
+          <div className="flex items-center w-full">
             {message.type === "success" ? (
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-6 w-6 mr-2"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
+              <>
+                <div className="flex-shrink-0">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-6 w-6 mr-2"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <p className="font-medium">Success!</p>
+                  <p className="text-sm opacity-90">
+                    {message.text ||
+                      `Great job ${message.userName}! Your profile has been updated.`}
+                  </p>
+                </div>
+                <div className="flex-shrink-0">
+                  <div className="badge badge-success badge-outline animate-bounce">
+                    Updated
+                  </div>
+                </div>
+              </>
             ) : (
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-6 w-6 mr-2"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
+              <>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-6 w-6 mr-2"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+                <span>{message.text}</span>
+                <button
+                  onClick={() => setMessage(null)}
+                  className="ml-auto bg-red-700 hover:bg-red-800 p-1.5 rounded-full transition-colors duration-200 flex items-center justify-center"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-5 w-5"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                </button>
+              </>
             )}
-            <span>{message.text}</span>
           </div>
         </div>
       )}
@@ -263,8 +407,14 @@ export const EditProfile = ({ user }) => {
                 name="firstName"
                 value={formData.firstName}
                 onChange={handleChange}
-                className="input input-bordered focus:input-primary"
+                className={`input input-bordered ${
+                  !validateName(formData.firstName) && formData.firstName
+                    ? "input-error"
+                    : "focus:input-primary"
+                }`}
                 placeholder="First Name"
+                pattern="[A-Za-z\s-]+"
+                title="First name must contain only letters, spaces, and hyphens"
                 required
               />
             </div>
@@ -278,8 +428,14 @@ export const EditProfile = ({ user }) => {
                 name="lastName"
                 value={formData.lastName}
                 onChange={handleChange}
-                className="input input-bordered focus:input-primary"
+                className={`input input-bordered ${
+                  !validateName(formData.lastName) && formData.lastName
+                    ? "input-error"
+                    : "focus:input-primary"
+                }`}
                 placeholder="Last Name"
+                pattern="[A-Za-z\s-]+"
+                title="Last name must contain only letters, spaces, and hyphens"
                 required
               />
             </div>
@@ -322,14 +478,7 @@ export const EditProfile = ({ user }) => {
                 onKeyDown={(e) => {
                   if ((e.key === "Enter" || e.key === ",") && newSkill.trim()) {
                     e.preventDefault();
-                    if (!formData.skills.includes(newSkill.trim())) {
-                      const updatedSkills = [
-                        ...formData.skills,
-                        newSkill.trim(),
-                      ];
-                      setFormData({ ...formData, skills: updatedSkills });
-                    }
-                    setNewSkill("");
+                    addSkill();
                   }
                 }}
                 className="input input-bordered focus:input-primary flex-1 h-12 text-base"
@@ -337,16 +486,7 @@ export const EditProfile = ({ user }) => {
               />
               <button
                 type="button"
-                onClick={() => {
-                  if (
-                    newSkill.trim() &&
-                    !formData.skills.includes(newSkill.trim())
-                  ) {
-                    const updatedSkills = [...formData.skills, newSkill.trim()];
-                    setFormData({ ...formData, skills: updatedSkills });
-                    setNewSkill("");
-                  }
-                }}
+                onClick={addSkill}
                 className="btn btn-primary h-12 px-6"
               >
                 Add
@@ -365,10 +505,10 @@ export const EditProfile = ({ user }) => {
                     <button
                       type="button"
                       onClick={() => {
-                        const updatedSkills = formData.skills.filter(
-                          (_, i) => i !== index
-                        );
-                        setFormData({ ...formData, skills: updatedSkills });
+                        setFormData({
+                          ...formData,
+                          skills: formData.skills.filter((_, i) => i !== index),
+                        });
                       }}
                       className="btn btn-ghost btn-xs"
                     >
@@ -397,7 +537,7 @@ export const EditProfile = ({ user }) => {
             <FaInfoCircle className="mr-2" /> About You
           </h3>
 
-          <div className="form-control  flex gap-5">
+          <div className="form-control flex gap-5">
             <label className="label">
               <span className="label-text">About</span>
             </label>
@@ -424,6 +564,31 @@ export const EditProfile = ({ user }) => {
           </button>
         </div>
       </form>
+
+      {/* Toast Notification */}
+      {showToast && (
+        <div className="toast toast-end z-50">
+          <div className="alert alert-success shadow-lg shadow-success/20 flex gap-2">
+            <FaCheckCircle className="text-xl" />
+            <div>
+              <h3 className="font-bold">Profile Updated!</h3>
+              <div className="text-xs">Your changes have been saved</div>
+            </div>
+            <div className="ml-2">
+              <div
+                className="radial-progress text-success-content border-4 border-success"
+                style={{
+                  "--value": 100,
+                  "--size": "2rem",
+                  "--thickness": "4px",
+                }}
+              >
+                ✓
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
